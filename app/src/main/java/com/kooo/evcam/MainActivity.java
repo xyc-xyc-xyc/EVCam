@@ -352,6 +352,13 @@ public class MainActivity extends AppCompatActivity {
             requiredTextureCount = 4;
             AppLog.d(TAG, "使用银河L6/L7配置：竖屏四宫格布局");
         }
+        // 银河L7-多按钮：竖屏四宫格布局（顶部多功能按钮）
+        else if (AppConfig.CAR_MODEL_L7_MULTI.equals(carModel)) {
+            layoutId = R.layout.activity_main_l7_multi;
+            configuredCameraCount = 4;
+            requiredTextureCount = 4;
+            AppLog.d(TAG, "使用银河L7-多按钮配置：竖屏四宫格+顶部快捷按钮布局");
+        }
         // 手机：自适应2摄像头布局
         else if (AppConfig.CAR_MODEL_PHONE.equals(carModel)) {
             layoutId = R.layout.activity_main_phone;
@@ -455,6 +462,27 @@ public class MainActivity extends AppCompatActivity {
                 drawerLayout.openDrawer(GravityCompat.START);
             }
         });
+        
+        // 多按钮布局的快捷导航按钮（仅在 L7-多按钮 布局中存在）
+        View btnVideoPlayback = findViewById(R.id.btn_video_playback);
+        if (btnVideoPlayback != null) {
+            btnVideoPlayback.setOnClickListener(v -> showPlaybackInterface());
+        }
+        
+        View btnPhotoPlayback = findViewById(R.id.btn_photo_playback);
+        if (btnPhotoPlayback != null) {
+            btnPhotoPlayback.setOnClickListener(v -> showPhotoPlaybackInterface());
+        }
+        
+        View btnRemoteView = findViewById(R.id.btn_remote_view);
+        if (btnRemoteView != null) {
+            btnRemoteView.setOnClickListener(v -> showRemoteViewInterface());
+        }
+        
+        View btnSettings = findViewById(R.id.btn_settings);
+        if (btnSettings != null) {
+            btnSettings.setOnClickListener(v -> showSettingsInterface());
+        }
 
         // 录制按钮：点击切换录制状态
         btnStartRecord.setOnClickListener(v -> toggleRecording());
@@ -973,9 +1001,10 @@ public class MainActivity extends AppCompatActivity {
                             textureView.setAspectRatio(previewSize.getWidth(), previewSize.getHeight());
                             
                             // 根据车型和摄像头数量决定显示模式
-                            // L7车型和1摄/2摄模式：使用适应模式，完整显示画面
+                            // L7车型（包括L7-多按钮）和1摄/2摄模式：使用适应模式，完整显示画面
                             // E5的4摄模式：启用填满模式，避免黑边
-                            boolean useFillMode = configuredCameraCount >= 4 && !AppConfig.CAR_MODEL_L7.equals(carModel);
+                            boolean isL7Layout = AppConfig.CAR_MODEL_L7.equals(carModel) || AppConfig.CAR_MODEL_L7_MULTI.equals(carModel);
+                            boolean useFillMode = configuredCameraCount >= 4 && !isL7Layout;
                             
                             if (useFillMode) {
                                 // 4摄模式（E5）：启用填满模式，避免黑边
@@ -1100,8 +1129,8 @@ public class MainActivity extends AppCompatActivity {
 
                 // 根据车型配置初始化摄像头
                 String carModel = appConfig.getCarModel();
-                if (AppConfig.CAR_MODEL_L7.equals(carModel)) {
-                    // 银河L6/L7：使用固定映射
+                if (AppConfig.CAR_MODEL_L7.equals(carModel) || AppConfig.CAR_MODEL_L7_MULTI.equals(carModel)) {
+                    // 银河L6/L7 / L7-多按钮：使用固定映射
                     initCamerasForL7(cameraIds);
                 } else if (appConfig.isCustomCarModel()) {
                     // 自定义车型：使用用户配置的摄像头映射

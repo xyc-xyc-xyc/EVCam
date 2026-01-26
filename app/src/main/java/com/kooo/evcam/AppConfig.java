@@ -83,6 +83,7 @@ public class AppConfig {
     // 车型常量
     public static final String CAR_MODEL_GALAXY_E5 = "galaxy_e5";  // 银河E5
     public static final String CAR_MODEL_L7 = "galaxy_l7";  // 银河L6/L7
+    public static final String CAR_MODEL_L7_MULTI = "galaxy_l7_multi";  // 银河L7-多按钮
     public static final String CAR_MODEL_PHONE = "phone";  // 手机
     public static final String CAR_MODEL_CUSTOM = "custom";  // 自定义车型
     
@@ -178,8 +179,9 @@ public class AppConfig {
             // 强制使用 MediaRecorder 模式
             return false;
         } else {
-            // 自动模式：只有 L6/L7 车型使用 Codec 模式
-            return CAR_MODEL_L7.equals(getCarModel());
+            // 自动模式：L6/L7 及 L7-多按钮 车型使用 Codec 模式
+            String carModel = getCarModel();
+            return CAR_MODEL_L7.equals(carModel) || CAR_MODEL_L7_MULTI.equals(carModel);
         }
     }
     
