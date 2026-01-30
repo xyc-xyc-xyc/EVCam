@@ -36,17 +36,17 @@ for /f "tokens=*" %%a in ('findstr /R "versionName" "%GRADLE_FILE%"') do (
 for /f "tokens=3 delims= " %%b in ("!LINE!") do (
     set "TEMP=%%~b"
 )
-REM 去除引号
+REM Remove quotes
 set CURRENT_VERSION_NAME=!TEMP:"=!
 echo [信息] 当前 versionName: !CURRENT_VERSION_NAME!
 
-REM 检查是否包含 -test- 后缀，提取基础版本号
+REM Check for -test- suffix
 set BASE_VERSION_NAME=!CURRENT_VERSION_NAME!
 set IS_TEST_VERSION=0
 echo !CURRENT_VERSION_NAME! | findstr /C:"-test-" > nul
 if !ERRORLEVEL! EQU 0 (
     set IS_TEST_VERSION=1
-    REM 提取 -test- 之前的部分作为基础版本号
+    REM Extract base version
     for /f "tokens=1 delims=-" %%b in ("!CURRENT_VERSION_NAME!") do (
         set BASE_VERSION_NAME=%%b
     )
@@ -55,17 +55,16 @@ if !ERRORLEVEL! EQU 0 (
 echo.
 
 REM ====================================================
-REM 自动递增 versionCode
+REM Auto increment versionCode
 REM ====================================================
 set /a NEW_VERSION_CODE=!CURRENT_VERSION_CODE!+1
 echo [自动] 新 versionCode: !NEW_VERSION_CODE! (自动递增)
 
 REM ====================================================
-REM 用户输入 versionName
+REM User input versionName
 REM ====================================================
 echo.
-echo [提示] 请输入 versionName（例如: 1.0.3）
-echo        直接按回车将使用: !BASE_VERSION_NAME!
+echo [提示] 请输入 versionName (例如 1.0.3), 直接回车使用: !BASE_VERSION_NAME!
 set /p NEW_VERSION_NAME="versionName: "
 
 if "!NEW_VERSION_NAME!"=="" (
@@ -73,7 +72,7 @@ if "!NEW_VERSION_NAME!"=="" (
     echo [信息] 使用版本名: !NEW_VERSION_NAME!
 )
 
-REM 设置 Git Tag 版本号（添加 v 前缀）
+REM Set Git Tag version
 set VERSION=v!NEW_VERSION_NAME!
 
 echo.
@@ -95,12 +94,12 @@ if /i not "!CONFIRM!"=="Y" (
 )
 
 REM ====================================================
-REM 更新 build.gradle.kts 文件
+REM Update build.gradle.kts
 REM ====================================================
 echo.
 echo [更新] 正在更新 %GRADLE_FILE%...
 
-REM 使用 PowerShell 更新文件内容
+REM Use PowerShell to update
 powershell -Command "(Get-Content '%GRADLE_FILE%') -replace 'versionCode = %CURRENT_VERSION_CODE%', 'versionCode = %NEW_VERSION_CODE%' | Set-Content '%GRADLE_FILE%' -Encoding UTF8"
 if errorlevel 1 (
     echo [错误] 更新 versionCode 失败！
@@ -119,7 +118,7 @@ echo [完成] build.gradle.kts 已更新
 echo.
 echo [信息] 版本号: !VERSION!
 
-REM 步骤0: 检查是否有未提交的更改
+REM Step 0: Check uncommitted changes
 echo [0/6] 检查 Git 状态...
 git diff --quiet
 set HAS_CHANGES=%ERRORLEVEL%
@@ -161,7 +160,7 @@ if errorlevel 1 (
 )
 
 echo [推送] 推送到远程仓库...
-REM 获取当前分支名
+REM Get current branch
 for /f "tokens=*" %%i in ('git branch --show-current') do set CURRENT_BRANCH=%%i
 git push origin !CURRENT_BRANCH!
 if errorlevel 1 (
@@ -173,7 +172,7 @@ echo.
 
 :skip_commit
 
-REM 步骤1: 清理旧的构建
+REM Step 1: Clean
 echo [1/6] 清理旧的构建文件...
 call gradlew.bat clean
 if errorlevel 1 (
@@ -183,7 +182,7 @@ if errorlevel 1 (
 echo [完成] 清理完成
 echo.
 
-REM 步骤2: 构建 Release APK
+REM Step 2: Build Release APK
 echo [2/6] 构建签名的 Release APK...
 call gradlew.bat assembleRelease
 if errorlevel 1 (
@@ -193,20 +192,20 @@ if errorlevel 1 (
 echo [完成] 构建成功
 echo.
 
-REM 检查 APK 是否生成
+REM Check APK generated
 set APK_PATH=app\build\outputs\apk\release\app-release.apk
 if not exist "%APK_PATH%" (
     echo [错误] 找不到生成的 APK 文件: %APK_PATH%
     exit /b 1
 )
 
-REM 重命名 APK
+REM Rename APK
 set RENAMED_APK=app\build\outputs\apk\release\EVCam-!VERSION!-release.apk
 copy "%APK_PATH%" "!RENAMED_APK!" > nul
 echo [完成] APK 已重命名为: EVCam-!VERSION!-release.apk
 echo.
 
-REM 步骤3: 创建并推送 Git Tag
+REM Step 3: Create Git Tag
 echo [3/6] 创建 Git Tag...
 git tag -a !VERSION! -m "Release !VERSION!"
 if errorlevel 1 (
@@ -226,7 +225,7 @@ if errorlevel 1 (
 echo [完成] Tag 推送成功
 echo.
 
-REM 步骤4: 检查 GitHub CLI
+REM Step 4: Check GitHub CLI
 echo [4/6] 检查 GitHub CLI...
 where gh > nul 2>&1
 if errorlevel 1 (
@@ -248,7 +247,7 @@ if errorlevel 1 (
 echo [完成] GitHub CLI 可用
 echo.
 
-REM 步骤5: 准备 Release Notes
+REM Step 5: Release Notes
 echo [5/6] 准备发布说明...
 echo.
 echo [提示] 请输入发布说明（直接按回车则留空）
@@ -262,7 +261,7 @@ if "!RELEASE_NOTES!"=="" (
 )
 echo.
 
-REM 步骤6: 创建 GitHub Release
+REM Step 6: Create GitHub Release
 echo [6/6] 创建 GitHub Release...
 if "!RELEASE_NOTES!"=="" (
     gh release create !VERSION! "!RENAMED_APK!" --title "EVCam !VERSION!" --notes ""
