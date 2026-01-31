@@ -1233,6 +1233,20 @@ public class MainActivity extends AppCompatActivity {
             public void startRecording() {
                 MainActivity.this.startRecording();
             }
+            
+            @Override
+            public void setSegmentDurationOverride(long durationMs) {
+                if (cameraManager != null) {
+                    cameraManager.setSegmentDurationOverride(durationMs);
+                }
+            }
+            
+            @Override
+            public void clearSegmentDurationOverride() {
+                if (cameraManager != null) {
+                    cameraManager.clearSegmentDurationOverride();
+                }
+            }
         });
         
         // 设置录制状态监听器
@@ -1700,6 +1714,10 @@ public class MainActivity extends AppCompatActivity {
                 AppLog.d(TAG, "远程录制时间戳更新: " + remoteRecordingTimestamp + " -> " + newTimestamp);
                 remoteRecordingTimestamp = newTimestamp;
             }
+            // 通知 RemoteCommandDispatcher 更新时间戳（新重构代码）
+            if (remoteCommandDispatcher != null) {
+                remoteCommandDispatcher.onTimestampUpdated(newTimestamp);
+            }
         });
 
         // 设置首次数据写入回调
@@ -1732,7 +1750,12 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 
-                // 如果是远程录制，现在才启动定时器
+                // 如果是远程录制，通知 RemoteCommandDispatcher 启动定时器
+                if (remoteCommandDispatcher != null) {
+                    remoteCommandDispatcher.onFirstDataWritten();
+                }
+                
+                // 兼容旧逻辑：如果是远程录制，现在才启动定时器
                 if (isRemoteRecording && pendingRemoteDurationSeconds > 0) {
                     AppLog.d(TAG, "远程录制首次写入成功，启动 " + pendingRemoteDurationSeconds + " 秒定时器");
                     autoStopHandler.postDelayed(autoStopRunnable, pendingRemoteDurationSeconds * 1000L);

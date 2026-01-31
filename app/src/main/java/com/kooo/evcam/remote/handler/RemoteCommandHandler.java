@@ -64,6 +64,8 @@ public abstract class RemoteCommandHandler {
         void stopRecordingTimer();
         void stopBlinkAnimation();
         void startRecording();  // 恢复手动录制
+        void setSegmentDurationOverride(long durationMs);  // 设置分段时长覆盖（用于远程录制）
+        void clearSegmentDurationOverride();  // 清除分段时长覆盖
     }
     
     /**
@@ -170,7 +172,13 @@ public abstract class RemoteCommandHandler {
         // 7. 标记开始远程录制
         isRemoteRecording = true;
         
-        // 8. 开始录制
+        // 8. 设置分段时长覆盖（远程录制不分段）
+        // 将分段时长设置为录制时长 + 30秒余量，确保整个录制过程不会触发分段
+        long segmentOverrideMs = (durationSeconds + 30) * 1000L;
+        cameraController.setSegmentDurationOverride(segmentOverrideMs);
+        AppLog.d(TAG, platformName + " 设置分段时长覆盖: " + (segmentOverrideMs / 1000) + " 秒（禁用分段）");
+        
+        // 9. 开始录制
         boolean success = cameraController.startRecording(timestamp);
         if (success) {
             onRecordingStarted(currentContext, durationSeconds);
@@ -215,6 +223,8 @@ public abstract class RemoteCommandHandler {
             // 停止录制（跳过自动传输，等上传完成后再传输）
             if (cameraController != null) {
                 cameraController.stopRecording(true);
+                // 清除分段时长覆盖（恢复为用户配置值）
+                cameraController.clearSegmentDurationOverride();
             }
             
             // 停止前台服务
@@ -225,12 +235,12 @@ public abstract class RemoteCommandHandler {
             
             // 更新状态
             isPreparingRecording = false;
-            if (recordingStateListener != null) {
-                recordingStateListener.onPreparingComplete();
-            }
-            
-            // 标记远程录制结束
             isRemoteRecording = false;
+            
+            // 通知监听器录制结束（停止闪烁动画、恢复按钮颜色等）
+            if (recordingStateListener != null) {
+                recordingStateListener.onRemoteRecordingStop();
+            }
             
             // 延迟后处理上传和恢复
             mainHandler.postDelayed(() -> {
@@ -252,6 +262,18 @@ public abstract class RemoteCommandHandler {
             AppLog.d(TAG, "首次数据写入，启动定时器: " + pendingDurationSeconds + " 秒");
             autoStopHandler.postDelayed(autoStopRunnable, pendingDurationSeconds * 1000L);
             pendingDurationSeconds = 0;
+        }
+    }
+    
+    /**
+     * 通知时间戳更新（Watchdog 重建录制后调用）
+     * 由 MainActivity 在录制时间戳变化时调用
+     */
+    public void onTimestampUpdated(String newTimestamp) {
+        if (isRemoteRecording && currentContext != null) {
+            String oldTimestamp = currentContext.getTimestamp();
+            currentContext.setTimestamp(newTimestamp);
+            AppLog.d(TAG, getPlatformName() + " 远程录制时间戳更新: " + oldTimestamp + " -> " + newTimestamp);
         }
     }
     
@@ -282,6 +304,11 @@ public abstract class RemoteCommandHandler {
         String platformName = getPlatformName();
         AppLog.e(TAG, platformName + " 远程录制启动失败");
         isRemoteRecording = false;
+        
+        // 清除分段时长覆盖
+        if (cameraController != null) {
+            cameraController.clearSegmentDurationOverride();
+        }
         
         // 如果之前有手动录制，尝试恢复
         if (ctx.wasManualRecordingBefore() && cameraController != null) {
@@ -340,7 +367,7 @@ public abstract class RemoteCommandHandler {
      */
     private void uploadVideos(RecordingContext ctx) {
         String platformName = getPlatformName();
-        String timestamp = ctx.getTimestamp();
+        List<String> allTimestamps = ctx.getAllTimestamps();
         ChatIdentifier chatId = ctx.getChatId();
         
         // 检查 API 客户端
@@ -350,10 +377,10 @@ public abstract class RemoteCommandHandler {
             return;
         }
         
-        // 查找视频文件
-        List<File> videoFiles = mediaFileFinder.findVideoFiles(timestamp);
+        // 查找视频文件（使用所有时间戳，包括 Watchdog 重建前后的）
+        List<File> videoFiles = mediaFileFinder.findVideoFiles(allTimestamps);
         if (videoFiles.isEmpty()) {
-            AppLog.e(TAG, "未找到录制的视频文件，时间戳: " + timestamp);
+            AppLog.e(TAG, "未找到录制的视频文件，时间戳: " + allTimestamps);
             sendError(chatId, "未找到录制的视频文件");
             returnToBackgroundIfNeeded();
             return;
@@ -382,6 +409,9 @@ public abstract class RemoteCommandHandler {
             @Override
             public void onError(String error) {
                 AppLog.e(TAG, platformName + " 视频上传失败: " + error);
+                
+                // 即使上传失败，也要传输文件到最终存储位置（保留视频）
+                mediaFileFinder.transferToFinalDir(videoFiles);
                 
                 // 平台特定的错误处理（如文件大小限制提示）
                 handleUploadError(chatId, error);
